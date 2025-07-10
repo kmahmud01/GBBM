@@ -1,0 +1,204 @@
+# Load necessary libraries
+library(MASS)
+library(stats)
+library(ggplot2)
+
+# Read the data
+data <- read.table("data1.dat", header = TRUE)
+
+# Assign variables
+y1 <- data$neo1
+y2 <- data$neo2
+x1 <- data$rsecondary
+
+# Prepare data frame
+data <- data.frame(x1 = x1, y1 = y1, y2 = y2)
+
+# 1. Chi-square test of independence
+contingency_table <- table(data$y1, data$y2)
+chisq_test <- chisq.test(contingency_table)
+
+# 2. GBBM model
+GBBM1 <- function(x1, y1, y2, z) {
+  x <- as.matrix(cbind(1, x1))
+  y <- t(x)
+  beta01 <- c(rep(0, z))
+  beta11 <- c(rep(0, z))
+  beta1 <- c(rep(0, z))
+  beta <- c(beta01, beta11, beta1)
+  p01 <- (exp(x %*% beta01)) / (1 + exp(x %*% beta01))	
+  p11 <- (exp(x %*% beta11)) / (1 + exp(x %*% beta11))
+  p1  <- (exp(x %*% beta1)) / (1 + exp(x %*% beta1))
+  
+  score.beta01 <- c()
+  for (k in 1:length(beta01)) {
+    score.beta01[k] <- -sum(x[, k] * (1 - y1) * (p01 - y2))
+  }
+  score.beta11 <- c()
+  for (k in 1:length(beta11)) {
+    score.beta11[k] <- -sum(x[, k] * y1 * (p11 - y2))
+  }
+  score.beta1 <- c()
+  for (k in 1:length(beta1)) {
+    score.beta1[k] <- -sum(x[, k] * (p1 - y1))
+  }
+  score.beta <- c(score.beta01, score.beta11, score.beta1)
+  
+  inf.beta01 <- matrix(0, z, z)
+  for (l in 1:z) {
+    for (m in 1:z) {
+      inf.beta01[l, m] <- sum(y[l, ] * x[, m] * (1 - y1) * p01 * (1 - p01))
+    }
+  }
+  inf.beta11 <- matrix(0, z, z)
+  for (l in 1:z) {
+    for (m in 1:z) {
+      inf.beta11[l, m] <- sum(y[l, ] * x[, m] * y1 * p11 * (1 - p11))
+    }
+  }
+  inf.beta1 <- matrix(0, z, z)
+  for (l in 1:z) {
+    for (m in 1:z) {
+      inf.beta1[l, m] <- sum(y[l, ] * x[, m] * p1 * (1 - p1))
+    }
+  }
+  C <- matrix(0, nrow = z, ncol = z)
+  inf.beta <- cbind(rbind(inf.beta01, C, C), rbind(C, inf.beta11, C), rbind(C, C, inf.beta1))
+  d <- det(inf.beta)
+  beta.hat <- beta + (solve(inf.beta) %*% score.beta)
+  count <- 1
+  print(count)
+  
+  OrChk <- function(beta, beta.hat) {
+    p <- length(beta)
+    b <- abs(beta[1] - beta.hat[1]) > 0.0001
+    if (!b) {
+      for (i in 2:p) {
+        b <- b | (abs(beta[i] - beta.hat[i]) > 0.0001)
+        if (b) break
+      }
+    }
+    b
+  }
+  
+  while (OrChk(beta, beta.hat)) {
+    beta01 <- c(beta.hat[1:z])
+    beta11 <- c(beta.hat[(z + 1):(z + z)])
+    beta1  <- c(beta.hat[(z + z + 1):(z + z + z)])
+    beta <- c(beta01, beta11, beta1)
+    p01 <- (exp(x %*% beta01)) / (1 + exp(x %*% beta01))
+    p11 <- (exp(x %*% beta11)) / (1 + exp(x %*% beta11))
+    p1  <- (exp(x %*% beta1)) / (1 + exp(x %*% beta1))
+    
+    score.beta01 <- c()
+    for (k in 1:length(beta01)) {
+      score.beta01[k] <- -sum(x[, k] * (1 - y1) * (p01 - y2))
+    }
+    score.beta11 <- c()
+    for (k in 1:length(beta11)) {
+      score.beta11[k] <- -sum(x[, k] * y1 * (p11 - y2))
+    }
+    score.beta1 <- c()
+    for (k in 1:length(beta1)) {
+      score.beta1[k] <- -sum(x[, k] * (p1 - y1))
+    }
+    score.beta <- c(score.beta01, score.beta11, score.beta1)
+    
+    inf.beta01 <- matrix(0, z, z)
+    for (l in 1:z) {
+      for (m in 1:z) {
+        inf.beta01[l, m] <- sum(y[l, ] * x[, m] * (1 - y1) * p01 * (1 - p01))
+      }
+    }
+    inf.beta11 <- matrix(0, z, z)
+    for (l in 1:z) {
+      for (m in 1:z) {
+        inf.beta11[l, m] <- sum(y[l, ] * x[, m] * y1 * p11 * (1 - p11))
+      }
+    }
+    inf.beta1 <- matrix(0, z, z)
+    for (l in 1:z) {
+      for (m in 1:z) {
+        inf.beta1[l, m] <- sum(y[l, ] * x[, m] * p1 * (1 - p1))
+      }
+    }
+    inf.beta <- cbind(rbind(inf.beta01, C, C), rbind(C, inf.beta11, C), rbind(C, C, inf.beta1))
+    d <- det(inf.beta)
+    beta.hat <- beta + (solve(inf.beta) %*% score.beta)
+    count <- count + 1
+    print(count)
+  }
+  
+  est <- beta.hat
+  sd <- sqrt(diag(solve(inf.beta)))
+  w <- est / sd
+  var <- diag(solve(inf.beta))
+  pval <- 2 * (1 - pnorm(abs(w)))
+  b01 <- beta.hat[1:z]
+  ob01 <- exp(b01)
+  s01 <- sd[1:z]
+  pv01 <- pval[1:z]
+  b11 <- beta.hat[(z + 1):(z + z)]
+  ob11 <- exp(b11)
+  s11 <- sd[(z + 1):(z + z)]
+  pv11 <- pval[(z + 1):(z + z)]
+  b1 <- beta.hat[(z + z + 1):(z + z + z)]
+  ob1 <- exp(b1)
+  s1 <- sd[(z + z + 1):(z + z + z)]
+  pv1 <- pval[(z + z + 1):(z + z + z)]
+  var.b01 <- solve(inf.beta01)
+  var.b11 <- solve(inf.beta11)
+  mat <- var.b01 + var.b11
+  chisq <- (t(b01 - b11)) %*% solve(mat) %*% (b01 - b11)
+  Pval <- pchisq(chisq, z, lower.tail = FALSE)
+  return(list(
+    chisq = chisq,
+    p_value = Pval
+  ))
+}
+
+# 3. Logistic Regression Model with interaction
+fit_full_model_and_calculate_stat <- function(data) {
+  full_model <- glm(y2 ~ x1 + y1 + x1:y1, data = data, family = binomial)
+  coeffs <- coef(full_model)[c("y1", "x1:y1")]
+  vcov_matrix <- vcov(full_model)[c("y1", "x1:y1"), c("y1", "x1:y1")]
+  test_stat <- t(coeffs) %*% solve(vcov_matrix) %*% coeffs
+  list(test_stat = test_stat)
+}
+
+# 4. Regressive Logistic Regression Model
+fit_simple_full_model <- function(data) {
+  simple_model <- glm(y2 ~ x1 + y1, data = data, family = binomial)
+  summary_simple <- summary(simple_model)
+  coeff_y1 <- coef(summary_simple)["y1", "Estimate"]
+  p_value_y1 <- coef(summary_simple)["y1", "Pr(>|z|)"]
+  list(
+    summary_simple = summary_simple,
+    coeff_y1 = coeff_y1,
+    p_value_y1 = p_value_y1
+  )
+}
+
+# 5. Run all models and print results
+gbmm_results <- GBBM1(x1, y1, y2, z = 2)
+full_model_results <- fit_full_model_and_calculate_stat(data)
+simple_model_results <- fit_simple_full_model(data)
+
+# Output
+cat("\nChi-Square Test for Independence:\n")
+print(chisq_test)
+
+cat("\nGBBM Test Statistic:", gbmm_results$chisq, "\n")
+cat("GBBM p-value:", gbmm_results$p_value, "\n")
+
+cat("\nLogistic Regression Model with interaction:\n")
+print(full_model_results$test_stat)
+cat("Full Model p-value:", pchisq(full_model_results$test_stat, df = 2, lower.tail = FALSE), "\n")
+
+cat("\n Regressive Logistic Regression Model Summary:\n")
+print(simple_model_results$summary_simple)
+
+
+cat("Coefficient for y1:", simple_model_results$coeff_y1, "\n")
+cat("p-value for y1:", simple_model_results$p_value_y1, "\n")
+
