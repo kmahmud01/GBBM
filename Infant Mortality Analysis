@@ -202,3 +202,6 @@ print(simple_model_results$summary_simple)
 cat("Coefficient for y1:", simple_model_results$coeff_y1, "\n")
 cat("p-value for y1:", simple_model_results$p_value_y1, "\n")
 
+
+#Data Availability Statement:
+The data used in this study were obtained from the Bangladesh Demographic and Health Survey (BDHS) 2014, which is publicly available upon request from the Demographic and Health Surveys (DHS) Program. Researchers can access the dataset by registering for free and submitting a data request at the DHS Program website: https://dhsprogram.com/data/available-datasets.cfm
